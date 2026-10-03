@@ -55,7 +55,13 @@ function parseDays(v) {
   if (!Number.isInteger(n) || n < 1 || n > 3650) throw new UserError(`--days takes a whole number from 1 to 3650, not "${v}".`);
   return n;
 }
-const projectDir = (v, cwd) => path.resolve(cwd, stringArg("--project", v, "."));
+// A drive-letter or UNC path is absolute on every system (budgets.json may be shared between machines);
+// path.resolve on macOS and Linux would treat "D:\work" as a relative name.
+const isAbsoluteAnywhere = (p) => path.isAbsolute(p) || /^[a-zA-Z]:[\\/]/.test(p) || /^\\\\[^\\]/.test(p);
+const projectDir = (v, cwd) => {
+  const p = stringArg("--project", v, ".");
+  return isAbsoluteAnywhere(p) ? p : path.resolve(cwd, p);
+};
 const scopeKeyOf = (dir) => (dir ? normPath(dir) : "all");
 
 // Bring the index up to date (no time limit) and return it, with a note when someone else held the lock.
