@@ -1,0 +1,40 @@
+{
+  "name": "claude-cost-guard",
+  "version": "1.0.0",
+  "description": "Daily and weekly token budgets for Claude Code, counted from your local transcripts, with zero-token warnings and an optional hard stop.",
+  "type": "module",
+  "bin": {
+    "claude-cost-guard": "bin/claude-cost-guard.mjs"
+  },
+  "files": [
+    "guard.mjs",
+    "bin",
+    "src",
+    "hooks",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": "github:nrzz/claude-cost-guard",
+  "homepage": "https://github.com/nrzz/claude-cost-guard#readme",
+  "bugs": "https://github.com/nrzz/claude-cost-guard/issues",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "budget",
+    "cost",
+    "tokens",
+    "usage",
+    "hook",
+    "statusline"
+  ],
+  "author": "Naresh Prabu",
+  "license": "MIT"
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-cost-guard",
+  "description": "Daily and weekly token budgets for Claude Code from your local transcripts, with zero-token warnings and an optional hard stop.",
+  "owner": {
+    "name": "Naresh Prabu"
+  },
+  "plugins": [
+    {
+      "name": "cost-guard",
+      "description": "A hook that checks your spending against daily and weekly budgets before every prompt: a warning line (shown to you, never sent to the model) at 50%, 80% and 100%, and in hard mode a block once the budget is used. Costs no tokens.",
+      "author": { "name": "Naresh Prabu" },
+      "category": "productivity",
+      "source": "./",
+      "homepage": "https://github.com/nrzz/claude-cost-guard"
+    }
+  ]
+}
