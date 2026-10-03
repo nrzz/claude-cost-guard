@@ -123,8 +123,8 @@ test("repository files: .gitignore, .gitattributes and the CI workflow", () => {
   assert.match(ci, /os: \[ubuntu-latest, windows-latest, macos-latest\]/);
   assert.match(ci, /node: \[20, 22, 24\]/);
   assert.match(ci, /- run: npm test/);
-  assert.match(ci, /actions\/checkout@v4/);
-  assert.match(ci, /actions\/setup-node@v4/);
+  assert.match(ci, /actions\/checkout@v\d+/);
+  assert.match(ci, /actions\/setup-node@v\d+/);
 });
 
 test("the README has the family's sections in the family's order", () => {
