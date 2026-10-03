@@ -132,9 +132,9 @@ test("the README has the family's sections in the family's order", () => {
   const headings = readme.split("\n").filter((l) => /^#{1,2} /.test(l));
   assert.deepEqual(headings, [
     "# Claude Code cost guard", "## What it costs in tokens", "## Install", "## Use", "## Budgets", "## How it counts", "## How it works",
-    "## What was verified, and how", "## Files", "## License",
+    "## What was verified, and how", "## Files", "## Contributing", "## Part of the Claude Code toolkit", "## License",
   ]);
-  assert.match(readme.split("\n")[2], /^\[!\[test\]\(https:\/\/github\.com\/nrzz\/claude-cost-guard\/actions\/workflows\/test\.yml\/badge\.svg\)\]\(https:\/\/github\.com\/nrzz\/claude-cost-guard\/actions\/workflows\/test\.yml\)$/, "the CI badge, right under the title");
+  assert.match(readme.split("\n")[2], /^\[!\[test\]\(https:\/\/github\.com\/nrzz\/claude-cost-guard\/actions\/workflows\/test\.yml\/badge\.svg\)\]\(https:\/\/github\.com\/nrzz\/claude-cost-guard\/actions\/workflows\/test\.yml\)( \S.*)?$/, "the CI badge leads the badge line, right under the title");
   // a two-sentence intro
   const intro = readme.split("\n")[4];
   assert.equal(intro.split(/(?<=[.!?])\s+(?=[A-Z])/).length, 2, intro);

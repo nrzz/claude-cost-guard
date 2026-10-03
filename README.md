@@ -1,6 +1,6 @@
 # Claude Code cost guard
 
-[![test](https://github.com/nrzz/claude-cost-guard/actions/workflows/test.yml/badge.svg)](https://github.com/nrzz/claude-cost-guard/actions/workflows/test.yml)
+[![test](https://github.com/nrzz/claude-cost-guard/actions/workflows/test.yml/badge.svg)](https://github.com/nrzz/claude-cost-guard/actions/workflows/test.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![node >= 18](https://img.shields.io/badge/node-%3E%3D18-339933.svg) ![dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg) [![part of the Claude Code toolkit](https://img.shields.io/badge/Claude%20Code-toolkit-d97757.svg)](https://github.com/nrzz/claude-code-toolkit)
 
 Daily and weekly budgets for Claude Code, counted from the transcripts on your machine: a warning line at 50%, 80% and 100%, and an optional hard stop that holds new prompts once the budget is used. Everything stays local, and none of it costs a token.
 
@@ -166,6 +166,23 @@ Not verified: a live Claude Code session. The build did not run one, so the hook
 After `init`, `~/.claude/cost-guard/` holds `app/` (the copy the hook runs), `index.json` (token counts, ids, session titles and the folders sessions ran in; no prompt, answer or tool output), `budgets.json`, `state.json` and `errors.log`.
 
 Related: [claude-code-handover](https://github.com/nrzz/claude-code-handover) keeps your sessions short with a handover file, [claude-code-team-sync](https://github.com/nrzz/claude-code-team-sync) shares sessions and context with your coworkers, and [claude-code-glow](https://github.com/nrzz/claude-code-glow) themes the interface and shows token tips in the status line.
+
+## Contributing
+
+Issues and pull requests are welcome: start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/nrzz/claude-cost-guard/issues?q=is%3Aopen+label%3A%22good+first+issue%22). Questions go to [Discussions](https://github.com/nrzz/claude-cost-guard/discussions); security reports go through [SECURITY.md](SECURITY.md).
+
+## Part of the Claude Code toolkit
+
+Small, dependency-free tools that make Claude Code cheaper, safer and easier to share, all in the [Claude Code toolkit](https://github.com/nrzz/claude-code-toolkit):
+
+- [claude-code-handover](https://github.com/nrzz/claude-code-handover): short sessions with a handover file every new session loads by itself
+- [claude-code-team-sync](https://github.com/nrzz/claude-code-team-sync): share sessions, notes and team context with coworkers
+- [claude-code-glow](https://github.com/nrzz/claude-code-glow): themes for the whole interface, a status line and a live HUD
+- [claude-code-guardrails](https://github.com/nrzz/claude-code-guardrails): safety presets that stop risky commands and edits
+- [claude-code-notify](https://github.com/nrzz/claude-code-notify): a ping when Claude needs you or finishes
+- [claude-md-doctor](https://github.com/nrzz/claude-md-doctor): what your CLAUDE.md costs every session, and how to slim it
+- [claude-code-starter-kits](https://github.com/nrzz/claude-code-starter-kits): a lean, safe .claude/ for your stack in one command
+- [claude-session-replay](https://github.com/nrzz/claude-session-replay): search past sessions and export one as an HTML replay
 
 ## License
 
