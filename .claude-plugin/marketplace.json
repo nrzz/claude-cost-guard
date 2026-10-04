@@ -7,7 +7,7 @@
   },
   "plugins": [
     {
-      "name": "cost-guard",
+      "name": "spendcap",
       "description": "A hook that checks your spending against daily and weekly budgets before every prompt: a warning line (shown to you, never sent to the model) at 50%, 80% and 100%, and in hard mode a block once the budget is used. Costs no tokens.",
       "author": { "name": "Naresh Prabu" },
       "category": "productivity",

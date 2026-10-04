@@ -14,7 +14,7 @@ const sources = [file("guard.mjs"), ...["bin", "src"].flatMap((d) => fs.readdirS
 
 test("package.json carries what the family's packages carry", () => {
   assert.equal(pkg.name, "claude-cost-guard");
-  assert.equal(pkg.version, "1.0.0");
+  assert.equal(pkg.version, "1.0.1");
   assert.equal(pkg.type, "module");
   assert.match(pkg.description, /budget/i);
   assert.deepEqual(pkg.bin, { "claude-cost-guard": "bin/claude-cost-guard.mjs" });
@@ -38,7 +38,8 @@ test("package.json carries what the family's packages carry", () => {
 
 test("the plugin manifest, the marketplace and the hook are the ones the plugin system expects", () => {
   const plugin = readJson(file(".claude-plugin", "plugin.json"));
-  assert.equal(plugin.name, "cost-guard");
+  assert.equal(plugin.name, "spendcap");
+  assert.equal(plugin.displayName, "Spendcap");
   assert.equal(plugin.version, pkg.version, "one version");
   assert.deepEqual(plugin.author, { name: "Naresh Prabu" });
   assert.equal(plugin.license, "MIT");
@@ -51,7 +52,7 @@ test("the plugin manifest, the marketplace and the hook are the ones the plugin 
   assert.deepEqual(market.owner, { name: "Naresh Prabu" });
   assert.equal(market.plugins.length, 1);
   const [entry] = market.plugins;
-  assert.equal(entry.name, "cost-guard");
+  assert.equal(entry.name, "spendcap");
   assert.deepEqual(entry.author, { name: "Naresh Prabu" });
   assert.equal(entry.category, "productivity");
   assert.equal(entry.source, "./");
@@ -143,7 +144,7 @@ test("the README has the family's sections in the family's order", () => {
   const rows = tokens.split("\n").filter((l) => /^\| /.test(l) && !/^\| ---/.test(l) && !/^\| Part/.test(l));
   assert.ok(rows.length >= 4);
   for (const row of rows) assert.match(row, /\| 0 \|/, row);
-  for (const needle of ["npx -y github:nrzz/claude-cost-guard init", "/plugin marketplace add nrzz/claude-cost-guard", "/plugin install cost-guard@claude-cost-guard"]) assert.ok(readme.includes(needle), needle);
+  for (const needle of ["npx -y github:nrzz/claude-cost-guard init", "/plugin marketplace add nrzz/claude-cost-guard", "/plugin install spendcap@claude-cost-guard"]) assert.ok(readme.includes(needle), needle);
   assert.doesNotMatch(readme, /\{\{|\}\}|TODO|FIXME/, "no placeholder left");
   assert.doesNotMatch(readme, /\p{Extended_Pictographic}/u, "no emojis");
   assert.ok(readme.trimEnd().endsWith("MIT"));

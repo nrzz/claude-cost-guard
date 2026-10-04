@@ -105,8 +105,14 @@ export function removeHook(settings) {
   return { settings: next, removed };
 }
 
-/** Plugins named cost-guard@... that settings.json enables: the plugin brings its own copy of the hook. */
-export const enabledPlugins = (data) => Object.entries((data && data.enabledPlugins) || {}).filter(([k, v]) => /^cost-guard@/.test(k) && v).map(([k]) => k);
+/**
+ * This tool's plugins that settings.json enables (the plugin brings its own copy of the hook): spendcap from any
+ * marketplace, or its name until 1.0.1, cost-guard, from this tool's own marketplaces (a cost-guard from elsewhere is
+ * somebody else's plugin).
+ */
+export const enabledPlugins = (data) => Object.entries((data && data.enabledPlugins) || {})
+  .filter(([k, v]) => v && (/^spendcap@/.test(k) || /^cost-guard@(claude-cost-guard|claude-code-toolkit)$/.test(k)))
+  .map(([k]) => k);
 
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });

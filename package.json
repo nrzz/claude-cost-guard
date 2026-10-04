@@ -1,6 +1,6 @@
 {
   "name": "claude-cost-guard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Daily and weekly token budgets for Claude Code, counted from your local transcripts, with zero-token warnings and an optional hard stop.",
   "type": "module",
   "bin": {

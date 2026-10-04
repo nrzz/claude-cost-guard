@@ -1,10 +1,15 @@
 {
-  "name": "cost-guard",
-  "version": "1.0.0",
+  "name": "spendcap",
+  "displayName": "Spendcap",
+  "version": "1.0.1",
   "description": "Daily and weekly token budgets for Claude Code, counted from your local transcripts: a zero-token warning at 50%, 80% and 100%, and an optional hard stop.",
   "author": { "name": "Naresh Prabu" },
   "homepage": "https://github.com/nrzz/claude-cost-guard",
   "repository": "https://github.com/nrzz/claude-cost-guard",
+  "documentationUrl": "https://github.com/nrzz/claude-cost-guard#readme",
+  "supportUrl": "https://github.com/nrzz/claude-cost-guard/issues",
+  "privacyPolicyUrl": "https://github.com/nrzz/claude-cost-guard#privacy",
+  "termsOfServiceUrl": "https://github.com/nrzz/claude-cost-guard/blob/main/LICENSE",
   "license": "MIT",
   "keywords": ["budget", "cost", "tokens", "usage", "limits", "hook", "productivity"]
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { hookEntryFor, init, isOurHook, mergeHook, readSettings, removeHook, status, uninstall } from "../src/install.mjs";
+import { enabledPlugins, hookEntryFor, init, isOurHook, mergeHook, readSettings, removeHook, status, uninstall } from "../src/install.mjs";
 import { ALPHA, S1, at, buildFixture, ls, readJson, runCli, runGuard, sandbox, usage } from "./helpers.mjs";
 
 function io() {
@@ -77,7 +77,7 @@ test("init into an empty config folder", () => {
     assert.ok(fs.existsSync(entry(box).args[0]), "the command points at a real file");
     assert.match(r.text, /copied guard\.mjs, bin\/ and src\/ into /);
     assert.match(r.text, /settings\.json: UserPromptSubmit hook added \(other settings untouched\)/);
-    assert.match(r.text, /checked: the installed guard runs \(version 1\.0\.0\)/);
+    assert.match(r.text, /checked: the installed guard runs \(version 1\.0\.1\)/);
     assert.match(r.text, /no transcripts yet under|indexed \d+ requests from \d+ transcripts/);
     assert.match(r.text, /claude-cost-guard budget set --daily 15usd --weekly 80usd/);
     // nothing escaped the config folder
@@ -290,17 +290,28 @@ test("two changes in the same second keep both backups", () => {
 test("the plugin and init together would run the hook twice: init, status and uninstall say so", () => {
   const box = sandbox();
   try {
-    fs.writeFileSync(settingsPath(box), JSON.stringify({ enabledPlugins: { "cost-guard@claude-cost-guard": true, "other@x": true } }));
+    fs.writeFileSync(settingsPath(box), JSON.stringify({ enabledPlugins: { "spendcap@claude-cost-guard": true, "other@x": true } }));
     const r = doInit(box);
-    assert.match(r.text, /! the plugin cost-guard@claude-cost-guard is enabled as well and runs the same hook/);
+    assert.match(r.text, /! the plugin spendcap@claude-cost-guard is enabled as well and runs the same hook/);
     const s = doStatus(box);
-    assert.match(s.text, /plugin +cost-guard@claude-cost-guard is enabled +\(! the hook then runs twice; keep one\)/);
+    assert.match(s.text, /plugin +spendcap@claude-cost-guard is enabled +\(! the hook then runs twice; keep one\)/);
     const u = doUninstall(box);
-    assert.match(u.text, /! the plugin cost-guard@claude-cost-guard is still enabled; remove it with \/plugin uninstall/);
-    assert.deepEqual(readJson(settingsPath(box)).enabledPlugins, { "cost-guard@claude-cost-guard": true, "other@x": true }, "the plugin setting is not ours to change");
-    fs.writeFileSync(settingsPath(box), JSON.stringify({ enabledPlugins: { "cost-guard@claude-cost-guard": false } }));
+    assert.match(u.text, /! the plugin spendcap@claude-cost-guard is still enabled; remove it with \/plugin uninstall/);
+    assert.deepEqual(readJson(settingsPath(box)).enabledPlugins, { "spendcap@claude-cost-guard": true, "other@x": true }, "the plugin setting is not ours to change");
+    fs.writeFileSync(settingsPath(box), JSON.stringify({ enabledPlugins: { "spendcap@claude-cost-guard": false } }));
     assert.doesNotMatch(doStatus(box).text, /plugin/);
   } finally { box.cleanup(); }
+});
+
+test("the plugin counts as ours as spendcap from any marketplace, and as cost-guard (its name until 1.0.1) only from ours", () => {
+  const on = (key) => enabledPlugins({ enabledPlugins: { [key]: true } }).length === 1;
+  assert.ok(on("spendcap@claude-cost-guard"));
+  assert.ok(on("spendcap@claude-code-toolkit"));
+  assert.ok(on("spendcap@elsewhere"));
+  assert.ok(on("cost-guard@claude-cost-guard"));
+  assert.ok(on("cost-guard@claude-code-toolkit"));
+  assert.ok(!on("cost-guard@elsewhere"), "a cost-guard from another marketplace is somebody else's plugin");
+  assert.deepEqual(enabledPlugins({ enabledPlugins: { "spendcap@claude-cost-guard": false, "a@b": true } }), []);
 });
 
 test("only --scope user is supported", () => {
@@ -319,7 +330,7 @@ test("status: what is installed, the budgets, the index and today", () => {
   try {
     buildFixture(box);
     const before = doStatus(box).text;
-    assert.match(before, /^claude-cost-guard 1\.0\.0$/m);
+    assert.match(before, /^claude-cost-guard 1\.0\.1$/m);
     assert.match(before, /hook +not in settings\.json \(claude-cost-guard init adds it\)/);
     assert.match(before, /budgets +none \(claude-cost-guard budget set --daily 15usd\)/);
     assert.match(before, /errors +none/);
