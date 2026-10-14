@@ -2,6 +2,10 @@
 
 All notable changes to Claude cost guard are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- README: Spendcap is in Anthropic's plugin directory (published 14 October 2026); the install line from there, `/plugin install spendcap@anthropic-plugin-directory`, verified with Claude Code 2.1.295 in a throwaway config. The toolkit list names claude-chat-ferry, and ends with a line about stars and following.
+
 ## [1.0.1] - 2026-10-04
 
 - Renamed the plugin, because Anthropic's plugin directory already has a plugin called cost-guard: it is `spendcap` now. If you installed it as `cost-guard`, uninstall that and install `spendcap`; your budgets are unchanged. `init`, `status` and `uninstall` still recognise the old name from this tool's own marketplaces, and a cost-guard plugin from anywhere else is no longer mistaken for this one.

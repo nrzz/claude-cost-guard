@@ -27,7 +27,13 @@ npx -y github:nrzz/claude-cost-guard budget set --daily 15usd --weekly 80usd
 
 `init` copies the guard to `~/.claude/cost-guard/app/`, adds one `UserPromptSubmit` hook to `~/.claude/settings.json` (after a timestamped backup, and only that one entry), and indexes the transcripts you already have. Start a new Claude Code session so it picks the hook up. From then on `node ~/.claude/cost-guard/app/bin/claude-cost-guard.mjs <command>` runs the command line without npx. The hook is started as `node`, so Node 18 or newer has to be on the `PATH` that Claude Code runs with. If you keep Claude Code's config somewhere else, set `CLAUDE_CONFIG_DIR`; everything follows it.
 
-As a Claude Code plugin, in Claude Code:
+As a Claude Code plugin, in Claude Code. Spendcap is in Anthropic's plugin directory since 14 October 2026, so it installs with nothing to add first:
+
+```text
+/plugin install spendcap@anthropic-plugin-directory
+```
+
+Or from this repository's own marketplace:
 
 ```text
 /plugin marketplace add nrzz/claude-cost-guard
@@ -189,8 +195,11 @@ Small, dependency-free tools that make Claude Code cheaper, safer and easier to 
 - [claude-md-doctor](https://github.com/nrzz/claude-md-doctor): what your CLAUDE.md costs every session, and how to slim it
 - [claude-code-starter-kits](https://github.com/nrzz/claude-code-starter-kits): a lean, safe .claude/ for your stack in one command
 - [claude-session-replay](https://github.com/nrzz/claude-session-replay): search past sessions and export one as an HTML replay
+- [claude-chat-ferry](https://github.com/nrzz/claude-chat-ferry): continue a Cursor or Antigravity chat in Claude Code, or hand a session to them
 
 Set up any of them, or all of them, from one page: `npx -y github:nrzz/claude-code-toolkit` opens it with the recommended tools switched on.
+
+If one of them saves you tokens, a star on its repository helps other people find it, and following [@nrzz](https://github.com/nrzz) on GitHub shows you new tools and releases.
 
 ## License
 
