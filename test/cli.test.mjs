@@ -404,3 +404,39 @@ test("nothing the commands print contains the conversation", async () => {
     assert.doesNotMatch(text, /D:\\work\\alpha|\/home\/dev\/beta/, "folder names, never the paths the sessions ran in");
   } finally { box.cleanup(); }
 });
+
+test("budget set, show, extend, and clear with --model", async () => {
+  const box = world();
+  try {
+    const r = await budget(box, "set", "--daily", "10usd", "--model", "opus");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^Budget set for opus: daily \$10 \(soft\)\.$/m);
+    assert.match(r.out, /opus +today \$3\.40 of \$10 \(34%\) +\[soft\]/);
+
+    const show = await budget(box, "show");
+    assert.match(show.out, /opus +today \$3\.40 of \$10 \(34%\) +\[soft\]/);
+
+    const ext = await budget(box, "extend", "5usd", "--model", "opus");
+    assert.equal(ext.code, 0, ext.err);
+    assert.match(ext.out, /Extended 1 budget by \$5 for today/);
+
+    const clr = await budget(box, "clear", "--model", "opus");
+    assert.equal(clr.code, 0, clr.err);
+    assert.match(clr.out, /Cleared 1 limit\./);
+  } finally { box.cleanup(); }
+});
+
+test("today and statusline display per-model budget when active", async () => {
+  const box = world();
+  try {
+    await budget(box, "set", "--daily", "10usd", "--model", "opus");
+    const today = await cli(box, ["today"]);
+    assert.equal(today.code, 0, today.err);
+    assert.match(today.out, /Budgets here:/);
+    assert.match(today.out, /opus +today \$3\.40 of \$10 \(34%\) +\[soft\]/);
+
+    const stat = await cli(box, ["statusline"], { stdin: "{}" });
+    assert.equal(stat.code, 0, stat.err);
+    assert.match(stat.out, /opus: today \$3\.40\/\$10/);
+  } finally { box.cleanup(); }
+});

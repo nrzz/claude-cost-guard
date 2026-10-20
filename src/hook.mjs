@@ -53,11 +53,12 @@ export function messageLines(slots, triggered) {
 /** Shown in place of a blocked prompt. The command it suggests has no $ in it: a shell would expand `$5` to nothing. */
 export function blockReason(slot) {
   const when = slot.period === "daily" ? "today's" : "this week's";
-  const forProject = slot.isGlobal ? "" : ` for ${slot.scope}`;
+  const forScope = slot.isGlobal ? "" : ` for ${slot.scope}`;
   const used = slot.unit === "usd" ? fmtMoney(slot.used) : fmtTokens(slot.used);
   const limit = `${fmtLimit(slot.unit, slot.limit)}${slot.unit === "tokens" ? " tokens" : ""}`;
   const extend = amountArg(slot.unit, niceStep(slot.base / 3));
-  return `Cost guard: ${when} budget of ${limit}${forProject} is used (${used}). Raise it with: claude-cost-guard budget extend ${extend}, or set CLAUDE_COST_GUARD_OFF=1.`;
+  const extendFlag = slot.model ? ` --model ${slot.model}` : "";
+  return `Cost guard: ${when} budget of ${limit}${forScope} is used (${used}). Raise it with: claude-cost-guard budget extend ${extend}${extendFlag}, or set CLAUDE_COST_GUARD_OFF=1.`;
 }
 
 /**

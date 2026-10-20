@@ -27,10 +27,10 @@ Set up
   claude-cost-guard status                 what is installed, the budgets, where you stand
 
 Budgets (dollars at API list prices, or fresh tokens: input + output + cache writes)
-  claude-cost-guard budget set --daily <amount> [--weekly <amount>] [--project <dir> | --all] [--mode soft|hard]
+  claude-cost-guard budget set --daily <amount> [--weekly <amount>] [--project <dir> | --all] [--model <family>] [--mode soft|hard]
   claude-cost-guard budget show
-  claude-cost-guard budget clear [--project <dir> | --all] [--daily] [--weekly]
-  claude-cost-guard budget extend <amount> [--project <dir> | --all]     raises today's limits; gone at midnight
+  claude-cost-guard budget clear [--project <dir> | --all] [--model <family>] [--daily] [--weekly]
+  claude-cost-guard budget extend <amount> [--project <dir> | --all] [--model <family>]     raises today's limits; gone at midnight
   amounts: 15usd or '$15' (quote it: shells expand $15), 3M or 500k tokens
   soft (default) warns at 50%, 80% and 100%; hard also blocks new prompts at 100%
 
@@ -194,6 +194,8 @@ function cmdBudget(args, ctx) {
   if (b.invalid && sub !== "show") throw new UserError(`${budgetsFile(cfg)} is not valid JSON. Fix it, or delete it to start again.`);
   if (args.all && args.project !== undefined) throw new UserError("Use --project <dir> or --all, not both.");
   const dir = args.project === undefined ? null : projectDir(args.project, ctx.cwd);
+  const model = args.model === undefined ? null : stringArg("--model", args.model, "opus");
+  if (model !== null && !model.trim()) throw new UserError("--model needs a non-empty model family or name, for example --model opus.");
 
   if (sub === "set") {
     const daily = args.daily === undefined ? null : parseAmount(stringArg("--daily", args.daily, "15usd"));
@@ -203,12 +205,17 @@ function cmdBudget(args, ctx) {
     if (args.hard) mode = "hard";
     if (args.soft) mode = "soft";
     if (mode !== undefined && mode !== "soft" && mode !== "hard") throw new UserError(`--mode takes soft or hard, not "${mode}".`);
-    const target = setBudget(b, { dir, daily, weekly, mode });
+    const target = setBudget(b, { dir, model: model ? model.trim() : null, daily, weekly, mode });
     saveBudgets(cfg, b);
-    const label = dir ? path.basename(dir) || dir : "all projects";
+    let label;
+    if (dir && model) label = `${path.basename(dir) || dir} (${model.trim()})`;
+    else if (model) label = model.trim();
+    else if (dir) label = path.basename(dir) || dir;
+    else label = "all projects";
     ctx.io.out(`Budget set for ${label}: ${[target.daily && `daily ${fmtAmount(target.daily)}`, target.weekly && `weekly ${fmtAmount(target.weekly)}`].filter(Boolean).join(", ")} (${target.mode}).`);
     if (dir && !fs.existsSync(dir)) ctx.io.out(`Note: ${dir} does not exist on this machine (the budget applies to sessions that ran there).`);
-    showUsage(ctx, cfg, b, [scopeKeyOf(dir)]); // also leaves the index warm for the first prompt
+    const scopeKey = model ? (dir ? `${normPath(dir)}|model:${model.trim().toLowerCase()}` : `model:${model.trim().toLowerCase()}`) : scopeKeyOf(dir);
+    showUsage(ctx, cfg, b, [scopeKey]); // also leaves the index warm for the first prompt
     const hint = hookHint(cfg);
     if (hint) ctx.io.out(hint);
     return 0;
@@ -227,7 +234,7 @@ function cmdBudget(args, ctx) {
   }
 
   if (sub === "clear") {
-    const n = clearBudget(b, { dir, all: !!args.all, daily: !!args.daily, weekly: !!args.weekly });
+    const n = clearBudget(b, { dir, model: model ? model.trim() : null, all: !!args.all, daily: !!args.daily, weekly: !!args.weekly });
     if (!n) { ctx.io.out("Nothing to clear."); return 0; }
     saveBudgets(cfg, b);
     syncMarks(cfg, today, [], limitKeys(entriesOf(b))); // forgets the announcements of limits that are gone
@@ -238,7 +245,7 @@ function cmdBudget(args, ctx) {
   if (sub === "extend") {
     if (args._[1] === undefined) throw new UserError("How much? For example: claude-cost-guard budget extend 5usd   (or 1M tokens)");
     const amount = parseAmount(args._[1]);
-    const keys = extendBudget(b, amount, { dir, all: !!args.all }, today);
+    const keys = extendBudget(b, amount, { dir, model: model ? model.trim() : null, all: !!args.all }, today);
     if (!keys.length) {
       throw new UserError(entriesOf(b).length
         ? `No budget there is counted in ${amount.unit === "usd" ? "dollars" : "tokens"}, so ${fmtAmount(amount)} cannot be added. Give the amount in the budget's own unit.`

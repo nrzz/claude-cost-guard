@@ -8,6 +8,7 @@ import {
 } from "../src/budgets.mjs";
 import { refresh } from "../src/index.mjs";
 import { buildCells } from "../src/usage.mjs";
+import { normPath } from "../src/util.mjs";
 import { ALPHA, BETA, NOW, buildFixture, expected, near, readJson, sandbox } from "./helpers.mjs";
 
 const TODAY = "2026-10-07";
@@ -177,4 +178,81 @@ test("usage against limits: global and project budgets, daily and weekly, dollar
 test("amounts parse the same whether they come from the command line or the file", () => {
   assert.deepEqual(parseAmount("15usd"), usd(15));
   assert.deepEqual(parseAmount("3M"), tok(3e6));
+});
+
+test("set: model budgets with or without a project, daily and/or weekly", () => {
+  const b = fresh();
+  setBudget(b, { model: "opus", daily: usd(10) });
+  assert.equal(b.models.length, 1);
+  assert.deepEqual(b.models[0], { model: "opus", dir: null, daily: usd(10), mode: "soft" });
+  setBudget(b, { model: "OPUS", weekly: usd(50), mode: "hard" });
+  assert.equal(b.models.length, 1, "case-insensitive matching updates existing entry");
+  assert.deepEqual(b.models[0], { model: "opus", dir: null, daily: usd(10), weekly: usd(50), mode: "hard" });
+  setBudget(b, { dir: ALPHA, model: "sonnet", daily: tok(2e6) });
+  assert.equal(b.models.length, 2);
+  assert.deepEqual(b.models[1], { dir: ALPHA, model: "sonnet", daily: tok(2e6), mode: "soft" });
+});
+
+test("budgets round-trip with model budgets through the file", () => {
+  const box = sandbox();
+  try {
+    const b = fresh();
+    setBudget(b, { model: "opus", daily: usd(10) });
+    setBudget(b, { dir: ALPHA, model: "sonnet", daily: tok(2e6) });
+    saveBudgets(box.cfg, b);
+    const loaded = loadBudgets(box.cfg);
+    assert.deepEqual(loaded.models, [
+      { model: "opus", dir: null, daily: usd(10), mode: "soft" },
+      { dir: ALPHA, model: "sonnet", daily: tok(2e6), mode: "soft" },
+    ]);
+    const entries = entriesOf(loaded);
+    assert.deepEqual(entries.map((e) => e.label), ["opus", "alpha (sonnet)"]);
+    assert.deepEqual(entries.map((e) => e.key), ["model:opus", `${normPath(ALPHA)}|model:sonnet`]);
+  } finally { box.cleanup(); }
+});
+
+test("clear: model budgets by model name, with or without project", () => {
+  const b = fresh();
+  setBudget(b, { daily: usd(15) });
+  setBudget(b, { model: "opus", daily: usd(10), weekly: usd(50) });
+  setBudget(b, { dir: ALPHA, model: "sonnet", daily: usd(5) });
+  assert.equal(clearBudget(b, { model: "opus", weekly: true }), 1, "clear weekly opus limit");
+  assert.deepEqual(b.models[0].weekly, undefined);
+  assert.deepEqual(b.models[0].daily, usd(10));
+  assert.equal(clearBudget(b, { model: "opus" }), 1, "clear remaining daily opus budget");
+  assert.equal(b.models.length, 1);
+  assert.equal(clearBudget(b, { dir: ALPHA, model: "sonnet" }), 1);
+  assert.equal(b.models.length, 0);
+});
+
+test("extend: raises the limit for a model budget", () => {
+  const b = fresh();
+  setBudget(b, { daily: usd(15) });
+  setBudget(b, { model: "opus", daily: usd(10) });
+  const keys = extendBudget(b, usd(3), { model: "opus" }, TODAY);
+  assert.deepEqual(keys, ["model:opus"]);
+  const e = entriesOf(b).find((x) => x.key === "model:opus");
+  assert.deepEqual(e.ext, { day: TODAY, usd: 3, tokens: 0 });
+});
+
+test("usage against limits: model budgets filter cells by model", () => {
+  const box = sandbox();
+  try {
+    buildFixture(box);
+    const { idx } = refresh(box.cfg, { now: NOW, full: true });
+    const cells = buildCells(idx, { fromDay: "2026-10-05", toDay: TODAY });
+    const b = fresh();
+    setBudget(b, { model: "opus", daily: usd(3.40), weekly: usd(4.25) });
+    setBudget(b, { model: "sonnet", daily: usd(5) });
+    const slots = evaluate(cells, entriesOf(b), TODAY);
+    const by = Object.fromEntries(slots.map((s) => [s.key, s]));
+    assert.ok(near(by["model:opus|daily"].used, 3.40), "opus today is $3.40");
+    assert.equal(by["model:opus|daily"].pct, 100);
+    assert.ok(near(by["model:opus|weekly"].used, 4.25), "opus this week is $4.25");
+    assert.equal(by["model:opus|weekly"].pct, 100);
+    assert.ok(near(by["model:sonnet|daily"].used, 2.62), "sonnet today is $2.40 + $0.22 = $2.62");
+    assert.equal(by["model:opus|daily"].isGlobal, false);
+    assert.equal(by["model:opus|daily"].isModel, true);
+    assert.equal(by["model:opus|daily"].model, "opus");
+  } finally { box.cleanup(); }
 });

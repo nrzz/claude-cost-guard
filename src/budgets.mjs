@@ -61,6 +61,17 @@ export function niceStep(x) {
   return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
 }
 
+/**
+ * Match a model pattern (such as a family "opus" or a full name "claude-opus-5-5") against a model id.
+ * Case-insensitive substring match: "opus" matches "claude-opus-5-5" and "claude-3-opus-20240229".
+ */
+export function modelMatches(pattern, model) {
+  if (!pattern) return true;
+  const p = String(pattern).trim().toLowerCase();
+  const m = String(model || "").toLowerCase();
+  return m.includes(p);
+}
+
 // ---------------------------------------------------------------------------------------------
 // The file
 // ---------------------------------------------------------------------------------------------
@@ -94,10 +105,20 @@ export function loadBudgets(cfg) {
     const s = normalizeScope(p);
     if (s && typeof p.dir === "string" && p.dir) out.projects.push({ dir: p.dir, ...s });
   }
+  if (Array.isArray(raw.models)) {
+    out.models = [];
+    for (const m of raw.models) {
+      const s = normalizeScope(m);
+      if (s && typeof m.model === "string" && m.model.trim()) {
+        out.models.push({ model: m.model.trim(), dir: typeof m.dir === "string" ? m.dir : null, ...s });
+      }
+    }
+  }
   return out;
 }
 export function saveBudgets(cfg, b) {
   const { invalid, ...rest } = b;
+  if (rest.models && rest.models.length === 0) delete rest.models;
   writeJsonAtomic(budgetsFile(cfg), rest, 2);
 }
 
@@ -105,8 +126,15 @@ export function saveBudgets(cfg, b) {
 export function entriesOf(b) {
   const out = [];
   const pick = (s) => ({ daily: s.daily, weekly: s.weekly, mode: s.mode || "soft", ext: s.ext });
-  if (b.global && (b.global.daily || b.global.weekly)) out.push({ key: "all", label: "all projects", dir: null, ...pick(b.global) });
-  for (const p of b.projects) if (p.daily || p.weekly) out.push({ key: normPath(p.dir), label: folderName(p.dir), dir: p.dir, ...pick(p) });
+  if (b.global && (b.global.daily || b.global.weekly)) out.push({ key: "all", label: "all projects", dir: null, model: null, ...pick(b.global) });
+  for (const p of b.projects || []) if (p.daily || p.weekly) out.push({ key: normPath(p.dir), label: folderName(p.dir), dir: p.dir, model: null, ...pick(p) });
+  for (const m of b.models || []) {
+    if (m.daily || m.weekly) {
+      const scopeLabel = m.dir ? `${folderName(m.dir)} (${m.model})` : m.model;
+      const key = m.dir ? `${normPath(m.dir)}|model:${m.model.toLowerCase()}` : `model:${m.model.toLowerCase()}`;
+      out.push({ key, label: scopeLabel, dir: m.dir || null, model: m.model, ...pick(m) });
+    }
+  }
   return out;
 }
 /** The state keys of every limit of these entries ("all|daily", ...): what the announced thresholds are filed under. */
@@ -115,9 +143,15 @@ export const limitKeys = (entries) => entries.flatMap((e) => ["daily", "weekly"]
 /** The budgets that count for a prompt typed in `cwd`: the all-projects one, and any project folder that holds `cwd`. */
 export const applicable = (b, cwd) => entriesOf(b).filter((e) => !e.dir || isInside(cwd, e.dir));
 
-export function setBudget(b, { dir, daily, weekly, mode }) {
+export function setBudget(b, { dir, model, daily, weekly, mode }) {
   let target;
-  if (dir) {
+  if (model) {
+    if (!b.models) b.models = [];
+    const key = model.toLowerCase();
+    const dirKey = dir ? normPath(dir) : null;
+    target = b.models.find((m) => m.model.toLowerCase() === key && (dirKey ? normPath(m.dir) === dirKey : !m.dir));
+    if (!target) { target = { model, dir: dir || null }; b.models.push(target); }
+  } else if (dir) {
     const key = normPath(dir);
     target = b.projects.find((p) => normPath(p.dir) === key);
     if (!target) { target = { dir }; b.projects.push(target); }
@@ -130,15 +164,20 @@ export function setBudget(b, { dir, daily, weekly, mode }) {
   return target;
 }
 
-function scopeTargets(b, { dir, all }) {
+function scopeTargets(b, { dir, model, all }) {
+  if (model) {
+    const mKey = model.toLowerCase();
+    const dirKey = dir ? normPath(dir) : null;
+    return (b.models || []).filter((m) => m.model.toLowerCase() === mKey && (!dir || normPath(m.dir) === dirKey));
+  }
   if (dir) { const key = normPath(dir); return b.projects.filter((p) => normPath(p.dir) === key); }
   if (all) return b.global ? [b.global] : [];
-  return [...(b.global ? [b.global] : []), ...b.projects];
+  return [...(b.global ? [b.global] : []), ...(b.projects || []), ...(b.models || [])];
 }
 
 /** Remove budgets: everything, the all-projects one (`all`), one project (`dir`); or only the `daily` / `weekly` limits of those. Returns how many limits went. */
-export function clearBudget(b, { dir, all, daily, weekly }) {
-  const targets = scopeTargets(b, { dir, all });
+export function clearBudget(b, { dir, model, all, daily, weekly }) {
+  const targets = scopeTargets(b, { dir, model, all });
   let removed = 0;
   for (const t of targets) {
     const both = !daily && !weekly;
@@ -146,21 +185,26 @@ export function clearBudget(b, { dir, all, daily, weekly }) {
     if ((both || weekly) && t.weekly) { delete t.weekly; removed++; }
     if (!t.daily && !t.weekly) delete t.ext;
   }
-  b.projects = b.projects.filter((p) => p.daily || p.weekly);
+  b.projects = (b.projects || []).filter((p) => p.daily || p.weekly);
+  if (b.models) b.models = b.models.filter((m) => m.daily || m.weekly);
   if (b.global && !b.global.daily && !b.global.weekly) b.global = null;
   return removed;
 }
 
 /** Raise the limits of the matching budgets by `amount` for `today` only. Returns the keys of the budgets that were extended. */
-export function extendBudget(b, amount, { dir, all }, today) {
+export function extendBudget(b, amount, { dir, model, all }, today) {
   const key = amount.unit === "usd" ? "usd" : "tokens";
   const keys = [];
-  for (const t of scopeTargets(b, { dir, all })) {
+  for (const t of scopeTargets(b, { dir, model, all })) {
     if (![t.daily, t.weekly].some((x) => x && x.unit === amount.unit)) continue;
     const ext = t.ext && t.ext.day === today ? t.ext : { day: today, usd: 0, tokens: 0 };
     ext[key] += amount.amount;
     t.ext = ext;
-    keys.push(t.dir ? normPath(t.dir) : "all");
+    if (t.model) {
+      keys.push(t.dir ? `${normPath(t.dir)}|model:${t.model.toLowerCase()}` : `model:${t.model.toLowerCase()}`);
+    } else {
+      keys.push(t.dir ? normPath(t.dir) : "all");
+    }
   }
   return keys;
 }
@@ -185,14 +229,15 @@ export function effectiveLimit(entry, period, today) {
 export function evaluate(cells, entries, today) {
   const slots = [];
   for (const e of entries) {
-    const mine = e.dir ? cells.filter((c) => isInside(c.cwd, e.dir)) : cells;
+    let mine = e.dir ? cells.filter((c) => isInside(c.cwd, e.dir)) : cells;
+    if (e.model) mine = mine.filter((c) => modelMatches(e.model, c.model));
     for (const period of ["daily", "weekly"]) {
       const lim = effectiveLimit(e, period, today);
       if (!lim) continue;
       const sum = sumCells(period === "daily" ? mine.filter((c) => c.day === today) : mine);
       const used = lim.unit === "usd" ? sum.cost : sum.fresh;
       slots.push({
-        key: `${e.key}|${period}`, scopeKey: e.key, scope: e.label, isGlobal: !e.dir, period, unit: lim.unit,
+        key: `${e.key}|${period}`, scopeKey: e.key, scope: e.label, isGlobal: !e.dir && !e.model, isModel: !!e.model, model: e.model || null, period, unit: lim.unit,
         base: lim.base, extra: lim.extra, limit: lim.limit, used, pct: (used / lim.limit) * 100, mode: e.mode,
       });
     }
