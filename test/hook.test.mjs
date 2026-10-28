@@ -18,6 +18,7 @@ function budgets(box, spec) {
   const b = { version: 1, global: null, projects: [] };
   if (spec.global) setBudget(b, spec.global);
   for (const p of spec.projects || []) setBudget(b, p);
+  for (const m of spec.models || []) setBudget(b, m);
   saveBudgets(box.cfg, b);
   return b;
 }
@@ -502,5 +503,28 @@ test("the specification's own example line, to the character: today $12.10 of $1
     fs.writeFileSync(path.join(box.guard, "state.json"), JSON.stringify({ day: TODAY, marks: { "all|weekly": 50 } }));
     const r = await say(box);
     assert.deepEqual(r, { systemMessage: "Cost guard: today $12.10 of $15 (81%) · this week $48 of $80" });
+  } finally { box.cleanup(); }
+});
+
+test("per-model budget warns and blocks with model-specific reason and extend suggestion", async () => {
+  const box = world({ models: [{ model: "opus", daily: usd(3), mode: "hard" }] });
+  try {
+    const r = await say(box);
+    assert.deepEqual(r, {
+      decision: "block",
+      reason: "Cost guard: today's budget of $3 for opus is used ($3.40). Raise it with: claude-cost-guard budget extend 1usd --model opus, or set CLAUDE_COST_GUARD_OFF=1.",
+    });
+  } finally { box.cleanup(); }
+});
+
+test("per-model budget next to an overall budget: both apply and the first one reached speaks", async () => {
+  const box = world({
+    global: { daily: usd(15), mode: "soft" },
+    models: [{ model: "opus", daily: usd(3), mode: "hard" }],
+  });
+  try {
+    const r = await say(box);
+    assert.equal(r.decision, "block");
+    assert.match(r.reason, /today's budget of \$3 for opus is used \(\$3\.40\)\. Raise it with: claude-cost-guard budget extend 1usd --model opus/);
   } finally { box.cleanup(); }
 });
