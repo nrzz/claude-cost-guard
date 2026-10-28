@@ -77,7 +77,7 @@ test("init into an empty config folder", () => {
     assert.ok(fs.existsSync(entry(box).args[0]), "the command points at a real file");
     assert.match(r.text, /copied guard\.mjs, bin\/ and src\/ into /);
     assert.match(r.text, /settings\.json: UserPromptSubmit hook added \(other settings untouched\)/);
-    assert.match(r.text, /checked: the installed guard runs \(version 1\.0\.1\)/);
+    assert.match(r.text, /checked: the installed guard runs \(version 1\.1\.0\)/);
     assert.match(r.text, /no transcripts yet under|indexed \d+ requests from \d+ transcripts/);
     assert.match(r.text, /claude-cost-guard budget set --daily 15usd --weekly 80usd/);
     // nothing escaped the config folder
@@ -330,7 +330,7 @@ test("status: what is installed, the budgets, the index and today", () => {
   try {
     buildFixture(box);
     const before = doStatus(box).text;
-    assert.match(before, /^claude-cost-guard 1\.0\.1$/m);
+    assert.match(before, /^claude-cost-guard 1\.1\.0$/m);
     assert.match(before, /hook +not in settings\.json \(claude-cost-guard init adds it\)/);
     assert.match(before, /budgets +none \(claude-cost-guard budget set --daily 15usd\)/);
     assert.match(before, /errors +none/);

@@ -1,7 +1,7 @@
 {
   "name": "spendcap",
   "displayName": "Spendcap",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Daily and weekly token budgets for Claude Code, counted from your local transcripts: a zero-token warning at 50%, 80% and 100%, and an optional hard stop.",
   "author": { "name": "Naresh Prabu" },
   "homepage": "https://github.com/nrzz/claude-cost-guard",

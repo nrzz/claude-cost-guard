@@ -14,7 +14,7 @@ const sources = [file("guard.mjs"), ...["bin", "src"].flatMap((d) => fs.readdirS
 
 test("package.json carries what the family's packages carry", () => {
   assert.equal(pkg.name, "claude-cost-guard");
-  assert.equal(pkg.version, "1.0.1");
+  assert.equal(pkg.version, "1.1.0");
   assert.equal(pkg.type, "module");
   assert.match(pkg.description, /budget/i);
   assert.deepEqual(pkg.bin, { "claude-cost-guard": "bin/claude-cost-guard.mjs" });
