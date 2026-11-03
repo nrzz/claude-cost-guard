@@ -190,7 +190,37 @@ function hookHint(cfg) {
 // when one matches (with no models seen there is nothing to check against: the callers say so or stay quiet).
 function unmatchedModel(model, seen) {
   if (seen.some((m) => modelMatches(model, m))) return null;
-  return `no model in your history contains "${model.trim()}" (models seen: ${seen.join(", ")}).`;
+  const close = nearest(model, seen);
+  return `no model in your history contains "${model.trim()}" (models seen: ${seen.join(", ")}).${close ? ` Did you mean "${close}"?` : ""}`;
+}
+
+// Edit distance between two short strings (the number of single-character inserts, deletes and changes).
+function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+// The one model id, or word of a model id, within 2 edits of the typed name, or null. Words come from splitting an id
+// on "-" and must be at least 4 characters, so "opuss" finds "opus" but "xyz" and "gpt" find nothing. The closest wins;
+// on a tie, a whole id beats a word and the first one seen beats a later one.
+function nearest(name, seen) {
+  const typed = name.trim().toLowerCase();
+  let best = null;
+  let bestDistance = 3;
+  const consider = (candidate) => {
+    const d = editDistance(typed, candidate);
+    if (d < bestDistance) { best = candidate; bestDistance = d; }
+  };
+  for (const id of seen) consider(id.toLowerCase());
+  for (const id of seen) for (const word of id.toLowerCase().split("-")) if (word.length >= 4) consider(word);
+  return best;
 }
 
 function cmdBudget(args, ctx) {

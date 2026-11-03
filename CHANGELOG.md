@@ -4,6 +4,8 @@ All notable changes to Claude cost guard are written here. The format follows [K
 
 ## [Unreleased]
 
+- `budget set --model` and `budget show` suggest the closest model when a name matches nothing in your history: `opuss` gives `Did you mean "opus"?`. It compares the name with each model id and each `-`-separated word of it (words of at least 4 characters) and suggests one only when it is within 2 edits, so `xyz` gets no suggestion and the note reads as before. Nothing else changes: a name that matches prints no note, the hook is untouched, and the exit code stays 0.
+
 ## [1.3.0] - 2026-11-03
 
 - `budget show` notes each saved model budget whose name matches no model in your history, with the models it has seen, so a budget saved with a typo before 1.2.0 no longer reads as a working limit at 0%. One note per name, after the budget lines; nothing when the name matches, for budgets with no model, or with no sessions yet. Nothing is changed or deleted, the exit code stays 0, and `budget set` shares the same words through one helper.
