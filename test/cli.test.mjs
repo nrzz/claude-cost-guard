@@ -433,10 +433,46 @@ test("budget set --model notes a name that matches no model in the history, and 
     assert.equal(r.code, 0, r.err);
     const lines = r.out.split("\n");
     assert.equal(lines[0], "Budget set for opuss: daily $10 (soft).");
-    assert.match(lines[1], /^Note: no model in your history contains "opuss" \(models seen: [^)]+\)\. The budget is saved and counts a model once one matches\.$/);
+    assert.match(lines[1], /^Note: no model in your history contains "opuss" \(models seen: [^)]+\)\. Did you mean "opus"\? The budget is saved and counts a model once one matches\.$/);
     for (const m of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-fable-5-1"]) assert.ok(lines[1].includes(m), m);
     assert.match(lines[2], /^ {2}opuss +today \$0(?:\.00)? of \$10 \(0%\) +\[soft\]/);
     assert.ok(loadBudgets(box.cfg).models.some((m) => m.model === "opuss" && m.daily), "saved");
+  } finally { box.cleanup(); }
+});
+
+test("budget set --model and budget show suggest the nearest model word for a typo", async () => {
+  const box = world();
+  try {
+    for (const [typo, word] of [["opuss", "opus"], ["sonet", "sonnet"], ["haiko", "haiku"]]) {
+      const r = await budget(box, "set", "--daily", "10usd", "--model", typo);
+      assert.equal(r.code, 0, r.err);
+      assert.match(r.out, new RegExp(`\\(models seen: [^)]+\\)\\. Did you mean "${word}"\\? The budget is saved and counts a model once one matches\\.`), typo);
+    }
+    const shown = await budget(box, "show");
+    assert.equal(shown.code, 0, shown.err);
+    assert.match(shown.out, /contains "opuss" \(models seen: [^)]+\)\. Did you mean "opus"\? That budget counts nothing until one matches\./);
+    assert.match(shown.out, /contains "sonet" .* Did you mean "sonnet"\?/);
+  } finally { box.cleanup(); }
+});
+
+test("budget set --model suggests a whole model id when that is the close one", async () => {
+  const box = world();
+  try {
+    const r = await budget(box, "set", "--daily", "10usd", "--model", "claude-opus-5-5-");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Did you mean "claude-opus-5-5"\?/);
+  } finally { box.cleanup(); }
+});
+
+test("budget set --model suggests nothing when no name is close", async () => {
+  const box = world();
+  try {
+    for (const name of ["xyz", "gpt"]) {
+      const r = await budget(box, "set", "--daily", "10usd", "--model", name);
+      assert.equal(r.code, 0, r.err);
+      assert.doesNotMatch(r.out, /Did you mean/, name);
+      assert.match(r.out, /\(models seen: [^)]+\)\. The budget is saved and counts a model once one matches\./, name);
+    }
   } finally { box.cleanup(); }
 });
 
@@ -472,7 +508,7 @@ test("budget show notes a model budget that matches no model in the history", as
     assert.match(lines[1], /^ {2}opuss +today \$0(?:\.00)? of \$10 \(0%\) +\[soft\]/);
     const notes = lines.filter((l) => l.startsWith("Note: no model"));
     assert.equal(notes.length, 1, r.out);
-    assert.match(notes[0], /^Note: no model in your history contains "opuss" \(models seen: [^)]+\)\. That budget counts nothing until one matches\.$/);
+    assert.match(notes[0], /^Note: no model in your history contains "opuss" \(models seen: [^)]+\)\. Did you mean "opus"\? That budget counts nothing until one matches\.$/);
     assert.ok(lines.indexOf(notes[0]) > 1, "after the budget lines");
     assert.ok(loadBudgets(box.cfg).models.some((m) => m.model === "opuss" && m.daily), "left as saved");
   } finally { box.cleanup(); }
