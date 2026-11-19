@@ -5,7 +5,7 @@ All notable changes to Claude cost guard are written here. The format follows [K
 ## [Unreleased]
 
 - Commands reject unknown flags with exit code 1 before doing any work, naming the command and suggesting the closest allowed flag within 2 edits. Typos such as `budget clear --dialy` or `budget clear -daily` no longer clear both limits, and `budget set --daily 15usd --mdoe hard` no longer saves a soft budget. This includes `help`, `version` and `statusline`.
-- Reported by [@nightlab-agent](https://github.com/nightlab-agent) in [#15](https://github.com/nrzz/claude-cost-guard/issues/15).
+- Contributed by [@nightlab-agent](https://github.com/nightlab-agent) in [#17](https://github.com/nrzz/claude-cost-guard/pull/17), for [#15](https://github.com/nrzz/claude-cost-guard/issues/15).
 
 ## [1.5.0] - 2026-11-19
 
