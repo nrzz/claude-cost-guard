@@ -16,6 +16,22 @@ import {
 } from "./util.mjs";
 
 const BOOLEAN_FLAGS = ["json", "all", "help", "version", "purge", "hard", "soft", "daily-only", "weekly-only"];
+const COMMAND_FLAGS = {
+  report: ["days", "by", "json"],
+  today: [],
+  statusline: [],
+  init: ["scope"],
+  uninstall: ["purge"],
+  status: [],
+  help: [],
+  version: [],
+};
+const BUDGET_FLAGS = {
+  set: ["daily", "weekly", "project", "all", "model", "mode", "hard", "soft"],
+  show: ["project", "all", "model"],
+  clear: ["project", "all", "model", "daily", "weekly"],
+  extend: ["project", "all", "model"],
+};
 const BY = ["day", "week", "project", "model", "session"];
 const SESSION_ROWS = 20;
 
@@ -210,8 +226,8 @@ function editDistance(a, b) {
 
 // The one model id, or word of a model id, within 2 edits of the typed name, or null. Words come from splitting an id
 // on "-" and must be at least 4 characters, so "opuss" finds "opus" but "xyz" and "gpt" find nothing. The closest wins;
-// on a tie, a whole id beats a word and the first one seen beats a later one.
-function nearest(name, seen) {
+// on a tie, a whole id beats a word and the first one seen beats a later one. Flag suggestions turn words off.
+function nearest(name, seen, words = true) {
   const typed = name.trim().toLowerCase();
   let best = null;
   let bestDistance = 3;
@@ -220,8 +236,22 @@ function nearest(name, seen) {
     if (d < bestDistance) { best = candidate; bestDistance = d; }
   };
   for (const id of seen) consider(id.toLowerCase());
-  for (const id of seen) for (const word of id.toLowerCase().split("-")) if (word.length >= 4) consider(word);
+  if (words) for (const id of seen) for (const word of id.toLowerCase().split("-")) if (word.length >= 4) consider(word);
   return best;
+}
+
+function validateFlags(name, flags, positionals, spelled = []) {
+  const sub = positionals[0] || "show";
+  const table = name === "budget" ? BUDGET_FLAGS : COMMAND_FLAGS;
+  const key = name === "budget" ? sub : name;
+  if (!Object.hasOwn(table, key)) return; // The dispatcher names unknown commands.
+  const allowed = [...table[key], "help"];
+  const command = name === "budget" ? `budget ${sub}` : name;
+  for (const [i, flag] of flags.entries()) {
+    if (allowed.includes(flag)) continue;
+    const close = nearest(flag.replace(/^-+/, ""), allowed, false); // "-daily" and "---daily" both suggest "--daily"
+    throw new UserError(`Unknown flag "${spelled[i] ?? `--${flag}`}" for "${command}".${close ? ` Did you mean "--${close}"?` : ""}`);
+  }
 }
 
 function cmdBudget(args, ctx) {
@@ -386,13 +416,14 @@ const COMMANDS = {
 
 export async function main(argv, { env = process.env, cwd = process.cwd(), io = consoleIO, now = Date.now(), stdin } = {}) {
   const [name, ...rest] = argv;
-  const args = parseArgs(rest, BOOLEAN_FLAGS);
-  if (!name || name === "help" || name === "--help" || name === "-h") { io.out(HELP); return 0; }
-  if (name === "--version" || name === "version" || name === "-v") { io.out(VERSION); return 0; }
-  const command = COMMANDS[name];
-  if (!command) { io.err(`Unknown command "${name}".\n`); io.out(HELP); return 1; }
-  if (args.help) { io.out(HELP); return 0; }
   try {
+    const commandName = !name || name === "--help" || name === "-h" ? "help" : name === "--version" || name === "-v" ? "version" : name;
+    const args = parseArgs(rest, BOOLEAN_FLAGS, (flags, positionals, spelled) => validateFlags(commandName, flags, positionals, spelled));
+    if (commandName === "help") { io.out(HELP); return 0; }
+    if (commandName === "version") { io.out(VERSION); return 0; }
+    const command = COMMANDS[name];
+    if (!command) { io.err(`Unknown command "${name}".\n`); io.out(HELP); return 1; }
+    if (args.help) { io.out(HELP); return 0; }
     return (await command(args, { env, cwd, io, now, stdin })) ?? 0;
   } catch (e) {
     if (e instanceof UserError) { io.err(e.message); return 1; }

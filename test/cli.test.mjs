@@ -23,6 +23,117 @@ function world(extra) {
 const budget = (box, ...args) => cli(box, ["budget", ...args]);
 const rowOf = (text, start) => text.split("\n").find((l) => l.startsWith(start));
 
+test("budget clear refuses --dialy without clearing either limit", async () => {
+  const box = sandbox();
+  try {
+    assert.equal((await budget(box, "set", "--daily", "15usd", "--weekly", "80usd", "--hard")).code, 0);
+    const before = fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8");
+    const r = await budget(box, "clear", "--dialy");
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unknown flag "--dialy" for "budget clear". Did you mean "--daily"?' });
+    assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before);
+    const good = await budget(box, "clear", "--daily");
+    assert.equal(good.code, 0, good.err);
+    assert.equal(loadBudgets(box.cfg).global.daily, undefined);
+    assert.equal(loadBudgets(box.cfg).global.weekly.amount, 80);
+  } finally { box.cleanup(); }
+});
+
+test("budget set refuses --mdoe without saving a soft budget", async () => {
+  const box = sandbox();
+  try {
+    const r = await budget(box, "set", "--daily", "15usd", "--mdoe", "hard");
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unknown flag "--mdoe" for "budget set". Did you mean "--mode"?' });
+    assert.equal(fs.existsSync(box.guard), false, "no budget, index or state was written");
+    const good = await budget(box, "set", "--daily", "15usd", "--mode", "hard");
+    assert.equal(good.code, 0, good.err);
+    assert.equal(loadBudgets(box.cfg).global.mode, "hard");
+  } finally { box.cleanup(); }
+});
+
+test("report refuses --dyas instead of silently showing seven days", async () => {
+  const box = sandbox();
+  try {
+    const r = await cli(box, ["report", "--dyas", "30"]);
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unknown flag "--dyas" for "report". Did you mean "--days"?' });
+    assert.equal(fs.existsSync(box.guard), false, "the index was not refreshed");
+    const good = await cli(box, ["report", "--days", "30", "--json"]);
+    assert.equal(good.code, 0, good.err);
+    assert.equal(JSON.parse(good.out).range.days, 30);
+  } finally { box.cleanup(); }
+});
+
+async function checkFlags(command, cases = [[]]) {
+  const box = sandbox();
+  try {
+    for (const flags of cases) {
+      assert.equal((await budget(box, "set", "--daily", "15usd", "--model", "opus", "--project", ".")).code, 0);
+      const r = await cli(box, [...command, ...flags], { stdin: "{}" });
+      assert.equal(r.code, 0, `${command.join(" ")} ${flags.join(" ")}: ${r.err}`);
+      assert.equal(r.err, "");
+    }
+    for (const flag of ["--help", "-h"]) {
+      const r = await cli(box, [...command, flag]);
+      assert.equal(r.code, 0, r.err);
+      assert.match(r.out, /Set up/);
+    }
+    const bad = await cli(box, [...command, "--frobnicate"], { stdin: "{}" });
+    assert.equal(bad.code, 1);
+    assert.equal(bad.out, "");
+    assert.equal(bad.err, `Unknown flag "--frobnicate" for "${command[0] === "budget" && command.length === 1 ? "budget show" : command.join(" ")}".`);
+  } finally { box.cleanup(); }
+}
+
+test("init accepts its documented flags", () => checkFlags(["init"], [["--scope", "user"]]));
+test("uninstall accepts its documented flags", () => checkFlags(["uninstall"], [[], ["--purge"]]));
+test("status accepts its documented flags", () => checkFlags(["status"]));
+test("today accepts its documented flags", () => checkFlags(["today"]));
+test("statusline accepts its documented flags", () => checkFlags(["statusline"]));
+test("report accepts its documented flags", () => checkFlags(["report"], [
+  ["--days", "30", "--by", "week", "--json"], ["--days=1", "--by=model", "--json=true"],
+]));
+test("budget defaults to show and accepts help", () => checkFlags(["budget"]));
+test("budget show accepts help and its existing scope flags", () => checkFlags(["budget", "show"], [
+  [], ["--all"], ["--project", ".", "--model", "opus"],
+]));
+test("budget set accepts its documented flags and mode aliases", () => checkFlags(["budget", "set"], [
+  ["--daily", "15usd", "--weekly", "80usd", "--all", "--model", "opus", "--mode", "hard"],
+  ["--daily=15usd", "--weekly=80usd", "--project=.", "--model=opus", "--soft"],
+  ["--daily", "15usd", "--hard"],
+]));
+test("budget clear accepts its documented flags", () => checkFlags(["budget", "clear"], [
+  ["--all", "--model", "opus", "--daily", "--weekly"], ["--project", ".", "--model", "opus", "--weekly"],
+]));
+test("budget extend accepts its documented flags", () => checkFlags(["budget", "extend"], [
+  ["5usd", "--all", "--model", "opus"], ["5usd", "--project", ".", "--model", "opus"],
+]));
+
+test("flag validation respects command scopes, equals, -- and flags before a budget subcommand", async () => {
+  const box = sandbox();
+  try {
+    for (const [argv, flag, command, suggestion] of [
+      [["budget", "set", "--daily=20usd", "--wekly=100usd"], "wekly", "budget set", "weekly"],
+      [["budget", "--hard", "clear"], "hard", "budget clear", null],
+      [["budget", "clear", "--mode", "hard"], "mode", "budget clear", "model"],
+      [["status", "--jsno"], "jsno", "status", null],
+      [["today", "--json"], "json", "today", null],
+      [["report", "--daxs=30"], "daxs", "report", "days"],
+      [["report", "--daysxxx=30"], "daysxxx", "report", null],
+      [["report", "--_", "extra"], "_", "report", "by"],
+      [["report", "--__proto__=bad"], "__proto__", "report", null],
+    ]) {
+      const r = await cli(box, argv);
+      assert.deepEqual(r, { code: 1, out: "", err: `Unknown flag "--${flag}" for "${command}".${suggestion ? ` Did you mean "--${suggestion}"?` : ""}` }, argv.join(" "));
+    }
+    assert.equal(fs.existsSync(box.guard), false);
+    const good = await cli(box, ["report", "--days=30", "--json", "--", "--dyas", "30"]);
+    assert.equal(good.code, 0, good.err);
+    assert.equal(JSON.parse(good.out).range.days, 30);
+    const beforeSub = await budget(box, "--hard", "set", "--daily", "15usd");
+    assert.equal(beforeSub.code, 0, beforeSub.err);
+    assert.equal(loadBudgets(box.cfg).global.mode, "hard");
+  } finally { box.cleanup(); }
+});
+
 test("help, version, and unknown commands", async () => {
   const box = sandbox();
   try {
@@ -33,7 +144,13 @@ test("help, version, and unknown commands", async () => {
       assert.match(r.out, /budget set --daily <amount>/);
       assert.match(r.out, /CLAUDE_COST_GUARD_OFF=1/);
     }
-    for (const args of [["--version"], ["version"]]) assert.deepEqual(await cli(box, args), { code: 0, out: "1.5.0", err: "" });
+    for (const args of [["--version"], ["version"], ["-v"]]) assert.deepEqual(await cli(box, args), { code: 0, out: "1.5.0", err: "" });
+    for (const command of ["help", "--help", "-h", "version", "--version", "-v"]) {
+      const r = await cli(box, [command, "--frobnicate"]);
+      assert.equal(r.code, 1);
+      assert.equal(r.out, "");
+      assert.match(r.err, /Unknown flag "--frobnicate" for "(?:help|version)"\./);
+    }
     const bad = await cli(box, ["frobnicate"]);
     assert.equal(bad.code, 1);
     assert.match(bad.err, /Unknown command "frobnicate"/);
@@ -676,5 +793,24 @@ test("today and statusline display per-model budget when active", async () => {
     const stat = await cli(box, ["statusline"], { stdin: "{}" });
     assert.equal(stat.code, 0, stat.err);
     assert.match(stat.out, /opus: today \$3\.40\/\$10/);
+  } finally { box.cleanup(); }
+});
+
+test("a one-dash word is refused, not taken as a word that clears both limits", async () => {
+  const box = sandbox();
+  try {
+    assert.equal((await budget(box, "set", "--daily", "15usd", "--weekly", "80usd", "--hard")).code, 0);
+    const before = fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8");
+    for (const [argv, flag, command] of [
+      [["budget", "clear", "-daily"], "-daily", "budget clear"],
+      [["budget", "set", "--daily", "20usd", "-mode", "soft"], "-mode", "budget set"],
+      [["budget", "clear", "---daily"], "---daily", "budget clear"],
+    ]) {
+      const r = await cli(box, argv);
+      assert.deepEqual(r, { code: 1, out: "", err: `Unknown flag "${flag}" for "${command}". Did you mean "--${flag.replace(/^-+/, "")}"?` }, argv.join(" "));
+    }
+    assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before);
+    const extend = await budget(box, "extend", "5usd");
+    assert.equal(extend.code, 0, extend.err);
   } finally { box.cleanup(); }
 });

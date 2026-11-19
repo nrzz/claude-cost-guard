@@ -270,22 +270,28 @@ export const padR = (s, w) => String(s).padEnd(w);
 /** Shortens to `max` characters with "..." (ASCII, so it prints the same everywhere). */
 export const ellipsis = (s, max) => (String(s).length > max ? `${String(s).slice(0, Math.max(0, max - 3))}...` : String(s));
 
-/** Minimal option parser: --key value, --key=value, boolean flags listed in `booleans`, positionals in `_`. */
-export function parseArgs(argv, booleans = []) {
+/** Minimal option parser: --key value, --key=value, booleans, positionals in `_`; optional flag validation before assignment. */
+export function parseArgs(argv, booleans = [], validate) {
   const bool = new Set(booleans);
   const args = { _: [] };
+  const options = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") { args._.push(...argv.slice(i + 1)); break; }
     if (a.startsWith("--") && a.length > 2) {
       const eq = a.indexOf("=");
       const key = eq > 0 ? a.slice(2, eq) : a.slice(2);
-      if (eq > 0) args[key] = a.slice(eq + 1);
-      else if (bool.has(key)) args[key] = true;
-      else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) args[key] = argv[++i];
-      else args[key] = true;
-    } else if (a === "-h") args.help = true;
+      let value;
+      if (eq > 0) value = a.slice(eq + 1);
+      else if (bool.has(key)) value = true;
+      else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) value = argv[++i];
+      else value = true;
+      options.push([key, value, `--${key}`]);
+    } else if (a === "-h") options.push(["help", true, a]);
+    else if (/^-[^-\d]/.test(a)) options.push([a, true, a]); // "-daily": checked, never taken as a word
     else args._.push(a);
   }
+  if (validate) validate(options.map(([key]) => key), args._, options.map(([, , spelled]) => spelled));
+  for (const [key, value] of options) args[key] = value;
   return args;
 }

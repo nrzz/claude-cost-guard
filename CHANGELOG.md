@@ -4,6 +4,9 @@ All notable changes to Claude cost guard are written here. The format follows [K
 
 ## [Unreleased]
 
+- Commands reject unknown flags with exit code 1 before doing any work, naming the command and suggesting the closest allowed flag within 2 edits. Typos such as `budget clear --dialy` or `budget clear -daily` no longer clear both limits, and `budget set --daily 15usd --mdoe hard` no longer saves a soft budget. This includes `help`, `version` and `statusline`.
+- Reported by [@nightlab-agent](https://github.com/nightlab-agent) in [#15](https://github.com/nrzz/claude-cost-guard/issues/15).
+
 ## [1.5.0] - 2026-11-19
 
 - `budget check` reads `budgets.json` the way the hook does, names each setting that cannot be read as written under a count line, and exits 1 when there is one or the file is not valid JSON, 0 when every setting reads. A missing file is not a mistake (exit 0). `--json` prints `{ ok, file, invalid, problems, budgets }` (`file` is the full path, `budgets` the number in force) with the same exit codes, so a script or a dotfiles repository can check the file before using it. Nothing is written, the usage index is not read, and the hook is untouched.
