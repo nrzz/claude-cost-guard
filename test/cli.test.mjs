@@ -95,6 +95,9 @@ test("budget defaults to show and accepts help", () => checkFlags(["budget"]));
 test("budget show accepts help and its existing scope flags", () => checkFlags(["budget", "show"], [
   [], ["--all"], ["--project", ".", "--model", "opus"],
 ]));
+test("budget check accepts only its documented --json flag", () => checkFlags(["budget", "check"], [
+  [], ["--json"], ["--json=true"],
+]));
 test("budget set accepts its documented flags and mode aliases", () => checkFlags(["budget", "set"], [
   ["--daily", "15usd", "--weekly", "80usd", "--all", "--model", "opus", "--mode", "hard"],
   ["--daily=15usd", "--weekly=80usd", "--project=.", "--model=opus", "--soft"],
@@ -114,6 +117,8 @@ test("flag validation respects command scopes, equals, -- and flags before a bud
       [["budget", "set", "--daily=20usd", "--wekly=100usd"], "wekly", "budget set", "weekly"],
       [["budget", "--hard", "clear"], "hard", "budget clear", null],
       [["budget", "clear", "--mode", "hard"], "mode", "budget clear", "model"],
+      [["budget", "show", "--daily", "5usd"], "daily", "budget show", null],
+      [["budget", "check", "--file", "x"], "file", "budget check", null],
       [["status", "--jsno"], "jsno", "status", null],
       [["today", "--json"], "json", "today", null],
       [["report", "--daxs=30"], "daxs", "report", "days"],
@@ -134,6 +139,32 @@ test("flag validation respects command scopes, equals, -- and flags before a bud
   } finally { box.cleanup(); }
 });
 
+test("every flag listed in HELP is accepted by its command's flag list", async () => {
+  const box = sandbox();
+  try {
+    const help = await cli(box, ["--help"]);
+    assert.equal(help.code, 0, help.err);
+    const lines = help.out.split("\n").filter((line) => line.startsWith("  claude-cost-guard "));
+    assert.ok(lines.length > 0, "HELP lists commands");
+    let checked = 0;
+    for (const line of lines) {
+      const match = /^  claude-cost-guard (budget [a-z]+|[a-z]+)\b/.exec(line);
+      assert.ok(match, line);
+      const command = match[1].split(" ");
+      // An absent list must fail too: validation otherwise skips that command entirely.
+      const bad = await cli(box, [...command, "--frobnicate"]);
+      assert.deepEqual(bad, { code: 1, out: "", err: `Unknown flag "--frobnicate" for "${match[1]}".` });
+      for (const flag of new Set(line.match(/--[a-z][a-z-]*/g) || [])) {
+        const r = await cli(box, [...command, flag, "--help"]);
+        assert.deepEqual(r, help, `${match[1]} ${flag} is listed in HELP`);
+        checked++;
+      }
+    }
+    assert.ok(checked > 0, "HELP lists flags");
+    assert.equal(fs.existsSync(box.guard), false, "checking HELP does not run the commands");
+  } finally { box.cleanup(); }
+});
+
 test("help, version, and unknown commands", async () => {
   const box = sandbox();
   try {
@@ -145,6 +176,13 @@ test("help, version, and unknown commands", async () => {
       assert.match(r.out, /CLAUDE_COST_GUARD_OFF=1/);
     }
     for (const args of [["--version"], ["version"], ["-v"]]) assert.deepEqual(await cli(box, args), { code: 0, out: "1.5.0", err: "" });
+    const help = await cli(box, ["help"]);
+    for (const command of ["help", "--help", "-h"]) {
+      for (const flag of ["--help", "-h"]) assert.deepEqual(await cli(box, [command, flag]), help, `${command} ${flag}`);
+    }
+    for (const flag of ["--version", "-v"]) {
+      assert.deepEqual(await cli(box, ["today", flag]), { code: 1, out: "", err: `Unknown flag "${flag}" for "today".` });
+    }
     for (const command of ["help", "--help", "-h", "version", "--version", "-v"]) {
       const r = await cli(box, [command, "--frobnicate"]);
       assert.equal(r.code, 1);

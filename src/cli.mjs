@@ -29,6 +29,7 @@ const COMMAND_FLAGS = {
 const BUDGET_FLAGS = {
   set: ["daily", "weekly", "project", "all", "model", "mode", "hard", "soft"],
   show: ["project", "all", "model"],
+  check: ["json"],
   clear: ["project", "all", "model", "daily", "weekly"],
   extend: ["project", "all", "model"],
 };
