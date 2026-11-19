@@ -241,7 +241,7 @@ function nearest(name, seen, words = true) {
   return best;
 }
 
-function validateFlags(name, flags, positionals, spelled = []) {
+function validateFlags(name, flags, positionals, spelled = [], values = []) {
   const sub = positionals[0] || "show";
   const table = name === "budget" ? BUDGET_FLAGS : COMMAND_FLAGS;
   const key = name === "budget" ? sub : name;
@@ -252,6 +252,17 @@ function validateFlags(name, flags, positionals, spelled = []) {
     if (allowed.includes(flag)) continue;
     const close = nearest(flag.replace(/^-+/, ""), allowed, false); // "-daily" and "---daily" both suggest "--daily"
     throw new UserError(`Unknown flag "${spelled[i] ?? `--${flag}`}" for "${command}".${close ? ` Did you mean "--${close}"?` : ""}`);
+  }
+  // Words: budget extend takes its one amount, every other command none after its name or its budget subcommand. In
+  // budget clear, --daily and --weekly take no value, so a word the parser gave one ("--daily weekly") is a word too.
+  const given = command === "budget clear" ? flags.flatMap((f, i) => (["daily", "weekly"].includes(f) && typeof values[i] === "string" ? [values[i]] : [])) : [];
+  const words = [...given, ...positionals.slice(name === "budget" ? 1 : 0)];
+  const taken = name === "budget" && sub === "extend" ? 1 : 0;
+  for (const word of words.slice(taken)) {
+    const flag = word.replace(/^-+/, ""); // "daily" and "-daily" (after "--") are --daily without its dashes
+    const unit = taken && /^(tokens?|usd)$/i.test(word); // "budget extend 1M tokens", as its own "How much?" line could be read
+    const hint = allowed.includes(flag) && flag !== "help" ? (word.startsWith("--") ? ` Put it before "--".` : ` Did you mean "--${flag}"?`) : unit ? ` Write the amount as one word, such as 1M or 5usd.` : taken ? ` It takes one amount.` : "";
+    throw new UserError(`Unexpected word "${word}" for "${command}".${hint}`);
   }
 }
 
@@ -419,7 +430,7 @@ export async function main(argv, { env = process.env, cwd = process.cwd(), io = 
   const [name, ...rest] = argv;
   try {
     const commandName = !name || name === "--help" || name === "-h" ? "help" : name === "--version" || name === "-v" ? "version" : name;
-    const args = parseArgs(rest, BOOLEAN_FLAGS, (flags, positionals, spelled) => validateFlags(commandName, flags, positionals, spelled));
+    const args = parseArgs(rest, BOOLEAN_FLAGS, (flags, positionals, spelled, values) => validateFlags(commandName, flags, positionals, spelled, values));
     if (commandName === "help") { io.out(HELP); return 0; }
     if (commandName === "version") { io.out(VERSION); return 0; }
     const command = COMMANDS[name];

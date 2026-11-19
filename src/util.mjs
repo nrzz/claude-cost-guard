@@ -291,7 +291,7 @@ export function parseArgs(argv, booleans = [], validate) {
     else if (/^-[^-\d]/.test(a)) options.push([a, true, a]); // "-daily": checked, never taken as a word
     else args._.push(a);
   }
-  if (validate) validate(options.map(([key]) => key), args._, options.map(([, , spelled]) => spelled));
+  if (validate) validate(options.map(([key]) => key), args._, options.map(([, , spelled]) => spelled), options.map(([, value]) => value));
   for (const [key, value] of options) args[key] = value;
   return args;
 }

@@ -4,6 +4,8 @@ All notable changes to Claude cost guard are written here. The format follows [K
 
 ## [Unreleased]
 
+- Each command takes only the words it documents: `budget extend` its one amount, every other command no word after its name or its `budget` subcommand. Any other word stops it with exit code 1 before anything is read or written, naming the word and the command, and suggesting the flag when the word is one of the command's flags without its dashes. `budget clear daily`, `budget clear -1`, `budget clear -`, `budget clear -- -daily` and `budget clear --daily weekly` no longer clear more than was meant, `budget set --daily 15usd hard` no longer saves a soft budget, `report 30` no longer reports 7 days, and `budget extend 5usd 3usd` no longer drops the second amount. A flag after `--` is a word now, so it stops the command too, and so does a word after `help` or `--help` (`help budget`). Contributed by [@nightlab-agent](https://github.com/nightlab-agent), for #18.
+
 ## [1.5.1] - 2026-11-19
 
 - Each command takes only its own flags. Any other flag, a typo or a flag of another command, stops it with exit code 1 before anything is read or written, naming the flag and the command and suggesting the nearest allowed flag within 2 edits. `budget clear --dialy` and `budget clear -daily` no longer clear both limits, `budget set --daily 15usd --mdoe hard` no longer saves a soft budget, and `report --dyas 30` no longer reports 7 days. This includes `help`, `version` and `statusline`. `--help`, `-h`, `--version`, `-v` and `--name=value` work as before; `--version` after a command, and `--help` beside a flag the command does not take, now name the flag instead.

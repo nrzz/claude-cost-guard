@@ -62,6 +62,63 @@ test("report refuses --dyas instead of silently showing seven days", async () =>
   } finally { box.cleanup(); }
 });
 
+test("budget clear refuses a word, with or without dashes, without clearing either limit", async () => {
+  const box = sandbox();
+  try {
+    assert.equal((await budget(box, "set", "--daily", "15usd", "--weekly", "80usd", "--hard")).code, 0);
+    const before = fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8");
+    for (const [words, word, hint] of [
+      [["daily"], "daily", "--daily"], [["weekly"], "weekly", "--weekly"], [["-1"], "-1", null], [["-"], "-", null],
+      [["--", "-daily"], "-daily", "--daily"], [["--daily", "weekly"], "weekly", "--weekly"],
+    ]) {
+      const r = await budget(box, "clear", ...words);
+      assert.deepEqual(r, { code: 1, out: "", err: `Unexpected word "${word}" for "budget clear".${hint ? ` Did you mean "${hint}"?` : ""}` }, words.join(" "));
+      assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before, words.join(" "));
+    }
+  } finally { box.cleanup(); }
+});
+
+test("budget set refuses a trailing hard without saving a soft budget", async () => {
+  const box = sandbox();
+  try {
+    const r = await budget(box, "set", "--daily", "15usd", "hard");
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unexpected word "hard" for "budget set". Did you mean "--hard"?' });
+    assert.equal(fs.existsSync(box.guard), false, "no budget, index or state was written");
+    assert.equal((await budget(box, "set", "--daily", "15usd", "--hard")).code, 0);
+    const before = fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8");
+    const soft = await budget(box, "set", "--daily", "20usd", "soft");
+    assert.deepEqual(soft, { code: 1, out: "", err: 'Unexpected word "soft" for "budget set". Did you mean "--soft"?' });
+    assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before);
+    assert.equal(loadBudgets(box.cfg).global.mode, "hard");
+  } finally { box.cleanup(); }
+});
+
+test("report refuses a bare number instead of silently showing seven days", async () => {
+  const box = sandbox();
+  try {
+    const r = await cli(box, ["report", "30"]);
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unexpected word "30" for "report".' });
+    assert.equal(fs.existsSync(box.guard), false, "the index was not refreshed");
+  } finally { box.cleanup(); }
+});
+
+test("budget extend takes one amount and refuses a second", async () => {
+  const box = sandbox();
+  try {
+    assert.equal((await budget(box, "set", "--daily", "15usd", "--hard")).code, 0);
+    const before = fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8");
+    const r = await budget(box, "extend", "5usd", "3usd");
+    assert.deepEqual(r, { code: 1, out: "", err: 'Unexpected word "3usd" for "budget extend". It takes one amount.' });
+    assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before);
+    const unit = await budget(box, "extend", "1M", "tokens");
+    assert.deepEqual(unit, { code: 1, out: "", err: 'Unexpected word "tokens" for "budget extend". Write the amount as one word, such as 1M or 5usd.' });
+    assert.equal(fs.readFileSync(path.join(box.guard, "budgets.json"), "utf8"), before);
+    const good = await budget(box, "extend", "5usd");
+    assert.equal(good.code, 0, good.err);
+    assert.equal(loadBudgets(box.cfg).global.ext.usd, 5);
+  } finally { box.cleanup(); }
+});
+
 async function checkFlags(command, cases = [[]]) {
   const box = sandbox();
   try {
@@ -76,6 +133,9 @@ async function checkFlags(command, cases = [[]]) {
       assert.equal(r.code, 0, r.err);
       assert.match(r.out, /Set up/);
     }
+    const name = command[0] === "budget" && command.length === 1 ? "budget show" : command.join(" ");
+    const word = await cli(box, [...command, ...(command[1] === "extend" ? ["5usd"] : []), "frobnicate"], { stdin: "{}" });
+    if (command.length > 1 || command[0] !== "budget") assert.deepEqual(word, { code: 1, out: "", err: `Unexpected word "frobnicate" for "${name}".${command[1] === "extend" ? " It takes one amount." : ""}` });
     const bad = await cli(box, [...command, "--frobnicate"], { stdin: "{}" });
     assert.equal(bad.code, 1);
     assert.equal(bad.out, "");
@@ -130,9 +190,10 @@ test("flag validation respects command scopes, equals, -- and flags before a bud
       assert.deepEqual(r, { code: 1, out: "", err: `Unknown flag "--${flag}" for "${command}".${suggestion ? ` Did you mean "--${suggestion}"?` : ""}` }, argv.join(" "));
     }
     assert.equal(fs.existsSync(box.guard), false);
-    const good = await cli(box, ["report", "--days=30", "--json", "--", "--dyas", "30"]);
-    assert.equal(good.code, 0, good.err);
-    assert.equal(JSON.parse(good.out).range.days, 30);
+    const afterDashes = await cli(box, ["report", "--days=30", "--json", "--", "--dyas", "30"]);
+    assert.deepEqual(afterDashes, { code: 1, out: "", err: 'Unexpected word "--dyas" for "report".' }, "after --, a flag is a word");
+    const flagAfterDashes = await cli(box, ["report", "--", "--json"]);
+    assert.deepEqual(flagAfterDashes, { code: 1, out: "", err: 'Unexpected word "--json" for "report". Put it before "--".' });
     const beforeSub = await budget(box, "--hard", "set", "--daily", "15usd");
     assert.equal(beforeSub.code, 0, beforeSub.err);
     assert.equal(loadBudgets(box.cfg).global.mode, "hard");
