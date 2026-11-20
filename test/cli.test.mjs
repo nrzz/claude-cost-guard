@@ -123,9 +123,10 @@ async function checkFlags(command, cases = [[]]) {
   const box = sandbox();
   try {
     for (const flags of cases) {
+      const fl = typeof flags === "function" ? flags(box) : flags;
       assert.equal((await budget(box, "set", "--daily", "15usd", "--model", "opus", "--project", ".")).code, 0);
-      const r = await cli(box, [...command, ...flags], { stdin: "{}" });
-      assert.equal(r.code, 0, `${command.join(" ")} ${flags.join(" ")}: ${r.err}`);
+      const r = await cli(box, [...command, ...fl], { stdin: "{}" });
+      assert.equal(r.code, 0, `${command.join(" ")} ${fl.join(" ")}: ${r.err}`);
       assert.equal(r.err, "");
     }
     for (const flag of ["--help", "-h"]) {
@@ -155,8 +156,8 @@ test("budget defaults to show and accepts help", () => checkFlags(["budget"]));
 test("budget show accepts help and its existing scope flags", () => checkFlags(["budget", "show"], [
   [], ["--all"], ["--project", ".", "--model", "opus"],
 ]));
-test("budget check accepts only its documented --json flag", () => checkFlags(["budget", "check"], [
-  [], ["--json"], ["--json=true"],
+test("budget check accepts only its documented --json and --file flags", () => checkFlags(["budget", "check"], [
+  [], ["--json"], ["--json=true"], (box) => ["--file", path.join(box.guard, "budgets.json")],
 ]));
 test("budget set accepts its documented flags and mode aliases", () => checkFlags(["budget", "set"], [
   ["--daily", "15usd", "--weekly", "80usd", "--all", "--model", "opus", "--mode", "hard"],
@@ -178,7 +179,7 @@ test("flag validation respects command scopes, equals, -- and flags before a bud
       [["budget", "--hard", "clear"], "hard", "budget clear", null],
       [["budget", "clear", "--mode", "hard"], "mode", "budget clear", "model"],
       [["budget", "show", "--daily", "5usd"], "daily", "budget show", null],
-      [["budget", "check", "--file", "x"], "file", "budget check", null],
+      [["budget", "check", "--flie"], "flie", "budget check", "file"],
       [["status", "--jsno"], "jsno", "status", null],
       [["today", "--json"], "json", "today", null],
       [["report", "--daxs=30"], "daxs", "report", "days"],
@@ -626,6 +627,110 @@ test("budget check treats a missing file as no budgets", async () => {
       problems: [],
       budgets: 0,
     });
+  } finally { box.cleanup(); }
+});
+
+test("budget check --file reads the named file instead of the installed one", async () => {
+  const box = sandbox();
+  try {
+    fs.mkdirSync(box.guard, { recursive: true });
+    fs.writeFileSync(path.join(box.guard, "budgets.json"), JSON.stringify({ version: 1, global: { mode: "block" } }));
+    const other = path.join(box.root, "dotfiles", "claude");
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, "budgets.json"), JSON.stringify({
+      version: 1,
+      global: { daily: { unit: "usd", amount: 15 }, mode: "soft" },
+    }));
+    const file = path.join(other, "budgets.json");
+    const text = await budget(box, "check", "--file", file);
+    assert.equal(text.code, 0, text.err);
+    assert.equal(text.out, "budgets.json: every setting is read as written (1 budget).");
+    const json = await budget(box, "check", "--file", file, "--json");
+    assert.equal(json.code, 0, json.err);
+    assert.deepEqual(JSON.parse(json.out), {
+      ok: true,
+      file,
+      invalid: false,
+      problems: [],
+      budgets: 1,
+    });
+  } finally { box.cleanup(); }
+});
+
+test("budget check --file reports a problem in the named file and exits 1", async () => {
+  const box = sandbox();
+  try {
+    const other = path.join(box.root, "dotfiles", "claude");
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, "budgets.json"), JSON.stringify({
+      version: 1,
+      global: { daily: { unit: "usd", amount: 15 }, mode: "block" },
+    }));
+    const file = path.join(other, "budgets.json");
+    const text = await budget(box, "check", "--file", file);
+    assert.equal(text.code, 1);
+    assert.deepEqual(text.out.split("\n"), [
+      "budgets.json: 1 setting cannot be read as written.",
+      '  global.mode is "block", which is neither "hard" nor "soft", so the budget is soft.',
+    ]);
+    const json = await budget(box, "check", "--file", file, "--json");
+    assert.equal(json.code, 1);
+    assert.deepEqual(JSON.parse(json.out), {
+      ok: false,
+      file,
+      invalid: false,
+      problems: [{ at: "global.mode", text: 'global.mode is "block", which is neither "hard" nor "soft", so the budget is soft.' }],
+      budgets: 1,
+    });
+  } finally { box.cleanup(); }
+});
+
+test("budget check --file takes a relative path from the current folder", async () => {
+  const box = sandbox();
+  try {
+    const other = path.join(box.home, "dotfiles", "claude");
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, "budgets.json"), JSON.stringify({ version: 1 }));
+    const text = await budget(box, "check", "--file", "dotfiles/claude/budgets.json");
+    assert.equal(text.code, 0, text.err);
+    assert.equal(text.out, "budgets.json: every setting is read as written (0 budgets).");
+  } finally { box.cleanup(); }
+});
+
+test("budget check --file refuses a path that does not exist", async () => {
+  const box = sandbox();
+  try {
+    const missing = path.join(box.root, "dotfiles", "claude", "budgets.json");
+    const text = await budget(box, "check", "--file", missing);
+    assert.equal(text.code, 1);
+    assert.equal(text.out, "");
+    assert.equal(text.err, `${missing}: no such file.`);
+    const json = await budget(box, "check", "--file", missing, "--json");
+    assert.equal(json.code, 1);
+    assert.equal(json.out, "");
+    assert.equal(json.err, `${missing}: no such file.`);
+  } finally { box.cleanup(); }
+});
+
+test("budget check --file needs a value", async () => {
+  const box = sandbox();
+  try {
+    const r = await budget(box, "check", "--file");
+    assert.equal(r.code, 1);
+    assert.equal(r.out, "");
+    assert.equal(r.err, "--file needs a value, for example --file dotfiles/claude/budgets.json.");
+  } finally { box.cleanup(); }
+});
+
+test("--file works with budget check only", async () => {
+  const box = sandbox();
+  try {
+    for (const sub of ["set", "show", "clear", "extend"]) {
+      const r = await budget(box, sub, "--file", "x");
+      assert.equal(r.code, 1, sub);
+      assert.equal(r.out, "", sub);
+      assert.equal(r.err, "--file works with budget check only.", sub);
+    }
   } finally { box.cleanup(); }
 });
 

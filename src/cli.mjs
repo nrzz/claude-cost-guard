@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  applicable, clearBudget, entriesOf, evaluate, extendBudget, fmtAmount, limitKeys, loadBudgets, modelMatches, parseAmount, saveBudgets, setBudget,
+  applicable, clearBudget, entriesOf, evaluate, extendBudget, fmtAmount, limitKeys, loadBudgets, loadBudgetsFrom, modelMatches, parseAmount, saveBudgets, setBudget,
 } from "./budgets.mjs";
 import { syncMarks } from "./hook.mjs";
 import { RETAIN_DAYS, refresh } from "./index.mjs";
@@ -27,11 +27,11 @@ const COMMAND_FLAGS = {
   version: [],
 };
 const BUDGET_FLAGS = {
-  set: ["daily", "weekly", "project", "all", "model", "mode", "hard", "soft"],
-  show: ["project", "all", "model"],
-  check: ["json"],
-  clear: ["project", "all", "model", "daily", "weekly"],
-  extend: ["project", "all", "model"],
+  set: ["daily", "weekly", "project", "all", "model", "mode", "hard", "soft", "file"],
+  show: ["project", "all", "model", "file"],
+  check: ["json", "file"],
+  clear: ["project", "all", "model", "daily", "weekly", "file"],
+  extend: ["project", "all", "model", "file"],
 };
 const BY = ["day", "week", "project", "model", "session"];
 const SESSION_ROWS = 20;
@@ -80,6 +80,13 @@ const projectDir = (v, cwd) => {
   const p = stringArg("--project", v, ".");
   return isAbsoluteAnywhere(p) ? p : path.resolve(cwd, p);
 };
+/** --file <path>: a relative path is resolved from the current folder, like --project; a missing file is a mistake. */
+function checkFile(v, cwd) {
+  const p = stringArg("--file", v, "dotfiles/claude/budgets.json");
+  const file = isAbsoluteAnywhere(p) ? p : path.resolve(cwd, p);
+  if (!fs.existsSync(file)) throw new UserError(`${file}: no such file.`);
+  return file;
+}
 const scopeKeyOf = (dir) => (dir ? normPath(dir) : "all");
 
 // Bring the index up to date (no time limit) and return it, with a note when someone else held the lock.
@@ -268,6 +275,7 @@ function validateFlags(name, flags, positionals, spelled = [], values = []) {
 
 function cmdBudget(args, ctx) {
   const sub = args._[0] || "show";
+  if (args.file !== undefined && sub !== "check") throw new UserError("--file works with budget check only.");
   const cfg = configDir(ctx.env);
   const today = dayKeyOf(ctx.now);
   const b = loadBudgets(cfg);
@@ -281,7 +289,8 @@ function cmdBudget(args, ctx) {
     ctx.io.out(`Note: the file was saved just now without ${fileNotes.length === 1 ? "that setting" : "those settings"}.`);
   };
   if (sub === "check") {
-    const file = budgetsFile(cfg);
+    const file = args.file === undefined ? budgetsFile(cfg) : checkFile(args.file, ctx.cwd);
+    const b = loadBudgetsFrom(file);
     const entries = entriesOf(b);
     const problems = b.problems.map(({ at, text }) => ({ at, text }));
     if (args.json) {

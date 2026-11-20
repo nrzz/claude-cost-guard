@@ -146,9 +146,18 @@ function readList(raw, name, need, problems, take) {
  * a JSON object is flagged `invalid`; settings that cannot be read are left out and named in `problems`.
  */
 export function loadBudgets(cfg) {
+  return loadBudgetsFrom(budgetsFile(cfg));
+}
+
+/**
+ * One budgets file, read exactly as the installed file is read: BOM stripped, JSON parsed, notes left alone, and
+ * every setting that cannot be read as written named in `problems` ({at, text}). A missing file means no budgets;
+ * one that is not valid JSON is `invalid`. Nothing is written, and the usage index is not read.
+ */
+export function loadBudgetsFrom(file) {
   const out = { version: 1, global: null, projects: [], invalid: false, problems: [] };
   let text;
-  try { text = stripBom(fs.readFileSync(budgetsFile(cfg), "utf8")); } catch { return out; }
+  try { text = stripBom(fs.readFileSync(file, "utf8")); } catch { return out; }
   let raw;
   try { raw = JSON.parse(text); } catch { out.invalid = true; return out; }
   if (!isObject(raw)) { out.invalid = true; return out; }
